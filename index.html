@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Painel CIASI</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #0f172a;
+    color: white;
+}
+
+h1 {
+    text-align: center;
+}
+
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+}
+
+.card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 10px;
+    width: 200px;
+    text-align: center;
+    box-shadow: 0 0 10px #000;
+}
+
+.card img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.nome {
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 5px;
+}
+
+.saram {
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+.status {
+    margin-top: 8px;
+    padding: 6px;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+/* CORES */
+.ESV { background: green; }
+.SSV { background: red; }
+.RES { background: purple; }
+.DEMOLIÇÃO { background: blue; }
+.AP OIO { background: orange; }
+
+</style>
+</head>
+
+<body>
+
+<h1>PAINEL CIASI - HOJE</h1>
+
+<div class="container" id="painel"></div>
+
+<script>
+
+// 🔗 LINKS (JÁ COLOQUEI PRA VOCÊ)
+const ESCALA = "https://opensheet.elk.sh/158Xh211avd9R3ptOhhdwg4Ckhz4aav-Zxd3P5EC7fcs/ESCALA%20CIASI%20PELOTÕES";
+const EFETIVO = "https://opensheet.elk.sh/1PSVy8cOTolQw9MG0lajqa-dVO284KtnZBp6LJWgmPVI/EFETIVO";
+
+// 📅 DATA AUTOMÁTICA
+function getDataHoje() {
+    const meses = ["jan.","fev.","mar.","abr.","mai.","jun.","jul.","ago.","set.","out.","nov.","dez."];
+    const hoje = new Date();
+    return hoje.getDate() + "/" + meses[hoje.getMonth()];
+}
+
+const DIA = getDataHoje();
+
+async function carregar() {
+
+    const escala = await fetch(ESCALA).then(r => r.json());
+    const efetivo = await fetch(EFETIVO).then(r => r.json());
+
+    const painel = document.getElementById("painel");
+
+    escala.forEach(m => {
+
+        const nome = m["CIASI"] || "";
+        const saram = m["SARAM"] || "";
+
+        if (!nome) return;
+
+        // 🔎 busca no efetivo
+        const ef = efetivo.find(e => e["SARAM"] == saram);
+
+        let foto = "";
+        if (ef && ef["FOTO"]) {
+            foto = ef["FOTO_URL"];
+        }
+
+        let situacao = m[DIA] || "N/A";
+
+        let classe = situacao
+            .replace(/\s/g, "")
+            .replace("-", "");
+
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+            <img src="${foto || 'https://via.placeholder.com/200'}">
+            <div class="nome">${nome}</div>
+            <div class="saram">${saram}</div>
+            <div class="status ${classe}">${situacao}</div>
+        `;
+
+        painel.appendChild(card);
+    });
+}
+
+// 🔥 CONVERTE CAMINHO DO APPSHEET (AJUSTE AQUI SE PRECISAR)
+function converterFoto(caminho) {
+    return "https://www.appsheet.com/template/gettablefileurl?appName=CIASI-561976797&tableName=EFETIVO&fileName=" + caminho;
+}
+
+</script>
+
+</body>
+</html>
