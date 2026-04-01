@@ -882,8 +882,16 @@ async function carregar() {
     // Renderizar grid
     const grid = document.getElementById("grid");
     militares.forEach((m, idx) => {
-      // Foto já vem processada como URL válida ou null
-      const fotoUrl = m._foto || null;
+      // Converte link Drive para formato sem bloqueio CORS
+      let fotoUrl = null;
+      if (m._foto) {
+        const match = m._foto.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (match) {
+          fotoUrl = `https://lh3.googleusercontent.com/d/${match[1]}`;
+        } else {
+          fotoUrl = m._foto;
+        }
+      }
 
       const card = criarCard(m, fotoUrl, m._situacao, idx);
       grid.appendChild(card);
