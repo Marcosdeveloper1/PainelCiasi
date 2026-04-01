@@ -647,11 +647,6 @@ let filtroStatus = null;
 
 // Cache de IDs do Drive: filename → driveId
 const driveCache = {};
-const DRIVE_MAP = {
-  "ID_EFETIVO10.FOTO.112039.jpg": "1PZ7KrlXcZcgCsWhR2xsByt5ZWv_aqP9Q",
-  "ID_EFETIVO11.FOTO.112020.jpg": "17r_CG5RtTbgE7aIPu-N3uNWBnCj18oiA",
-  "ID_EFETIVO12.FOTO.132251.jpg": "1YL__xgH7NRgGGusYDl8Ol4v5CYyqNLVY"
-};
 
 // Construir URL da foto
 // Estratégia: tenta usando proxy via Drive export por ID extraído do nome
@@ -659,29 +654,9 @@ const DRIVE_MAP = {
 // Não temos os IDs — então usamos placeholder com iniciais bonitas
 function fotoURL(caminho) {
   if (!caminho) return null;
-
-  // se já for link direto
+  // Se por acaso vier um ID do Drive diretamente
   if (caminho.startsWith("http")) return caminho;
-
-  // 🔥 limpa completamente o caminho
-  let nomeArquivo = caminho.split("/").pop().trim();
-
-  // 🔥 remove possíveis espaços invisíveis
-  nomeArquivo = nomeArquivo.replace(/\s/g, "");
-
-  // 🔥 segurança extra (caso venha com algo estranho)
-  nomeArquivo = nomeArquivo.replace("EFETIVO_Images", "").replace("/", "");
-
-  const id = DRIVE_MAP[nomeArquivo];
-
-  if (!id) {
-    console.log("❌ NÃO ACHOU:", nomeArquivo);
-    return null;
-  }
-
-  console.log("✅ ACHOU:", nomeArquivo);
-
-  return `https://lh3.googleusercontent.com/d/${id}`;
+  return null; // sem ID real, usamos avatar
 }
 
 function avatarHTML(nome, graduacao) {
@@ -814,10 +789,19 @@ async function carregar() {
     // Carregar as duas planilhas em paralelo
     const [resEscala, resEfetivo] = await Promise.all([
       fetch(URL_ESCALA).catch(() => null),
-      fetch(URL_EFETIVO)
+      fetch(URL_EFETIVO).catch(() => null)
     ]);
 
-    const efetivo = await resEfetivo.json();
+    if (!resEfetivo || !resEfetivo.ok) {
+      throw new Error("Planilha EFETIVO inacessível. Verifique se está publicada publicamente: Arquivo → Compartilhar → Publicar na Web → aba EFETIVO.");
+    }
+
+    let efetivo = await resEfetivo.json();
+    // Garante que é array
+    if (!Array.isArray(efetivo)) {
+      if (efetivo && typeof efetivo === 'object') efetivo = Object.values(efetivo);
+      else throw new Error("Formato inesperado na planilha EFETIVO.");
+    }
 
     // Mapa SARAM → dados do efetivo
     const efMap = {};
@@ -847,17 +831,31 @@ async function carregar() {
 
         let ef = efMap[saram] || nomeMap[nome.toUpperCase()] || null;
 
+        // Busca FOTO_URL — nome confirmado na planilha
+        let fotoURL = null;
+        if (ef) {
+          fotoURL = ef["FOTO_URL"] || null;
+          // fallback: varre chaves caso haja variação
+          if (!fotoURL) {
+            for (const key of Object.keys(ef)) {
+              if (key.trim().toUpperCase().replace(/[\s_]/g,"") === "FOTOURL") {
+                if (ef[key] && ef[key].startsWith("http")) { fotoURL = ef[key]; break; }
+              }
+            }
+          }
+        }
+
         militares.push({
           _nome: nome,
           _saram: saram,
           _situacao: situacao,
-          _foto: ef ? (ef.FOTO_URL || ef.FOTO || null) : null,
-          _grad: ef ? (ef.GRADUAÇÃO || "") : (m.GRADUAÇÃO || ""),
-          _funcao: ef ? (ef.FUNÇÃO || "") : "",
+          _foto: fotoURL,
+          _grad: ef ? (ef["GRADUAÇÃO"] || ef["GRADUACAO"] || "") : (m["GRADUAÇÃO"] || ""),
+          _funcao: ef ? (ef["FUNÇÃO"] || ef["FUNCAO"] || "") : "",
           EFETIVO: nome,
           SARAM: saram,
-          GRADUAÇÃO: ef ? (ef.GRADUAÇÃO || "") : (m.GRADUAÇÃO || ""),
-          FUNÇÃO: ef ? (ef.FUNÇÃO || "") : "",
+          GRADUAÇÃO: ef ? (ef["GRADUAÇÃO"] || "") : (m["GRADUAÇÃO"] || ""),
+          FUNÇÃO: ef ? (ef["FUNÇÃO"] || "") : "",
         });
       });
     } else {
@@ -869,7 +867,7 @@ async function carregar() {
           _nome: nome,
           _saram: (e.SARAM || "").trim(),
           _situacao: "",
-          _foto: e.FOTO_URL || e.FOTO || null,
+          _foto: (() => { for (const k of Object.keys(e)) { if (k.trim().toLowerCase().replace(/[\s_]/g,"") === "fotourl" && e[k] && e[k].startsWith("http")) return e[k]; } return null; })(),
           _grad: e.GRADUAÇÃO || "",
           _funcao: e.FUNÇÃO || "",
           ...e
@@ -884,11 +882,8 @@ async function carregar() {
     // Renderizar grid
     const grid = document.getElementById("grid");
     militares.forEach((m, idx) => {
-      // Processar foto
-      let fotoUrl = null;
-      if (m._foto) {
-  fotoUrl = fotoURL(m._foto);
-}
+      // Foto já vem processada como URL válida ou null
+      const fotoUrl = m._foto || null;
 
       const card = criarCard(m, fotoUrl, m._situacao, idx);
       grid.appendChild(card);
